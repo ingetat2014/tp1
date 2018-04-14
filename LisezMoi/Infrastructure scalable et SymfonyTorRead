@@ -1,0 +1,371 @@
+Introduction
+
+Si votre projet web prend de l’ampleur, une architecture orientée autour d’un simple serveur dédié, comme on le voit souvant, deviendra probablement insuffisante pour faire tourner votre application Symfony2.
+Absorber des pics de charges, réduire les risques liés à la panne, … de nombreuses raisons peuvent vous ammener à adopter une infrastructure scalable composée de plusieurs serveurs.
+
+Tour d’horizon des principales problématiques inhérentes à la mise en place d’une architecture scalable et distribuée pour son projet Symfony2, d’un point de vue développeur.
+
+Infrastructure simple
+
+La plus part des projets PHP sont hébergés sur des infrastructures simples.
+On rencontre principalement deux infrastructures, qui peuvent être des serveurs physiques, ou des machines virtuelles :
+– 1 serveur qui sert de LAMP
+– 1 serveur web + 1 serveur sql
+
+Ce type d’architecture montrera rapidement ses limites si votre projet prend de l’ampleur, ou s’il est gourmand en ressources.
+Vous ne pourrez pas disposer de plus de puissante que ce que vous fournit votre serveur, a moins de le transférer sur un serveur plus puissant..mais qui montrera tôt ou tard ses limites lui aussi.
+
+De plus, en cas de pic de charge, votre site ne pourra pas dépasser une certaine limite sans devenir indisponible: votre projet ne sera pas scalable.
+
+Infrastructure scalable
+
+En informatique matérielle et logicielle et en télécommunications, la scalability ou scalabilité désigne la capacité d'un produit à s'adapter à un changement d'ordre de grandeur de la demande (montée en charge), en particulier sa capacité à maintenir ses fonctionnalités et ses performances en cas de forte demande.
+Les infrastructures scalables pour les projets PHP sont généralement composée à minima de plusieurs :
+– load balancer web
+– load balancer mysql
+– serveur php-fpm
+– serveur mysql
+– serveur web (apache/nginx)
+– serveur redis (ou memcache)
+
+Votre applicatif Symfony2 devra être capable de fonctionner sur plusieurs serveurs simultanéments.
+Pour que cela soit possible, vous allez devoir résoudre quelques nouvelles problématiques dans votre projet Symfony2.
+
+Les sessions PHP
+
+Le fonctionnement des sessions PHP est très simple, le moteur crée un fichier texte dans lequel il stock toutes les informations de session.
+Par défaut, ce fichier sera dans le répertoire /tmp de votre système, sauf si vous utilisez une version rescente de Symfony2, qui redéfini par défaut le chemin où sont stockés les sessions, dans le répertoire app/cache/ de votre projet.
+
+Sur une architecture composée de plusieurs serveurs, toutes les sessions doivent être accessibles depuis n’importe quel serveur.
+Ce comportement ne nous ira pas, les sessions étant accessibles uniquement sur le serveur qui les a générés.
+
+Il existe plusieurs solutions pour résoudre ce problème. Si votre site ne possède pas un fort traffic, vous pouvez vous orienter vers PDO Session qui se met en place très rapidement et permet de stocker les sessions dans votre base de données.
+Si votre site possède un traffic important (ou si vous voulez simplement bien faire), il faudra vous orienter vers une solution à base de Redis.
+
+PDOSession
+
+Le framework Symfony2 contient plusieurs types de storage que vous pouvez utiliser par simple configuration.
+Le storage PDO Session permet de stocker dans votre base de données les informations de session de vos utilisateurs.
+Il a cependant un inconvénient, il recalcule en direct la date d’expiration de chaque session, pouvant provoquer quelques problèmes sur un site à fort traffic.
+Une solution rapide à mettre en place et qui peut se révéler utile, bien que nous recommandons l’utilisation de Redis.
+
+# app/config/config.yml
+framework:
+    session:
+        # ...
+        handler_id: session.handler.pdo
+
+services:
+    session.handler.pdo:
+        class:     Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler
+        public:    false
+        arguments:
+            - "mysql:host=%database_host%;port=%database_port%;dbname=%database_name%"
+            - { db_username: %database_user%, db_password: %database_password% }
+Pour fonctionner, il vous faudra créer la table SQL nécessaire au stockage des sessions.
+
+Si vous utilisez Symfony 2.7 et une base de donnée MySQL, executez la requete ci-dessous.
+Si vous êtes sur une autre version de Symfony ou si vous utilisez un autre SGBD que MySQL, rendez-vous sur le Cookbook de Symfony pour récupérer la requete correspondante à votre environnement.
+
+CREATE TABLE `sessions` (
+`sess_id` VARBINARY(128) NOT NULL PRIMARY KEY,
+`sess_data` BLOB NOT NULL,
+`sess_time` INTEGER UNSIGNED NOT NULL,
+`sess_lifetime` MEDIUMINT NOT NULL
+) COLLATE utf8_bin, ENGINE = InnoDB;
+Pour plus d’informations, rendez-vous sur le Cookbook de Symfony: http://symfony.com/doc/current/cookbook/doctrine/pdo_session_storage.html
+
+Redis
+
+Redis est une base de donnée clé=valeur qui stocke les informations en mémoire.
+Nous allons voir comment stocker les informations de session dans une instance Redis, ce qui vous permettra d’accéder aux sessions depuis n’importe quel serveur de votre infrastructure.
+
+Il n’y a malheuresement pas de storage en natif dans Symfony2, mais rassurez vous..il y a un bundle pour ca !
+
+Installation de SncRedisBundle
+
+Il existe deux versions du bundle, l’une utilisant une extension PHP qu’il vous faudra installer sur votre système d’exploitation, l’autre qui utilise la librairie Phredis (qui ne nécessite pas l’installation de l’extension PHP).
+Nous obterons ici pour la version Phredis.
+
+L’installation du bundle se fait avec Composer :
+
+composer require predis/predis 0.8.x-dev
+# app/AppKernel.php
+    $bundles = array(
+        // ...
+        new Snc\RedisBundle\SncRedisBundle(),
+        // ...
+    );
+Configuration de SncRedisBundle
+
+Pour stocker vos sessions dans Redis, il vous suffit d’ajouter la configuration ci-dessous:
+
+# app/config/config.yml
+snc_redis:
+    clients:
+        default:
+            type: predis
+            alias: default
+            dsn: redis://localhost
+    session:
+        client: default
+        prefix: session
+Le bundle permet de faire de nombreuses choses, consultez le README: https://github.com/snc/SncRedisBundle/blob/master/Resources/doc/index.md
+
+Fichiers partagés
+
+Généralement le code de votre projet sera déployé sur chaque serveur web.
+La même problématique que pour les sessions PHP va se poser pour tous les fichiers qui nécessitent d’être partagés entre vos serveurs.
+
+On peut citer par exemple les fichiers uploadés par les utilisateurs, qui devront être accessiblent depuis tous les serveurs de l’infrastructure et non uniquement sur le serveur où le fichier a été uploadé.
+
+Pour partager vos fichiers, il existe plusieurs solutions plus ou moins honéreuses.
+Nous allons voir deux possibilités:
+– le partage réseau via un serveur de fichier
+– l’utilisation d’un service de Cloud
+
+Serveur de fichier (filer)
+
+La mise en place de filers dans votre infrastructure peut se révéler utile pour partager vos fichiers via le réseau.
+Cette solution est transparente pour votre applicatif. On créé un raccourci vers un répertoire réseau, votre projet Symfony2 écrira dedans comme s’il écrivait dans un répertoire local.
+
+Ce raccourci réseau devra être présent sur tous les serveurs webs afin qu’ils puissent accéder aux fichiers partagés du serveur de fichiers.
+
+Amazon Cloud S3
+
+Une autre solution existe et consiste à utiliser un storage Cloud pour stocker vos fichiers.
+
+Voici un exemple d’implémentation du SDK d’Amazon.
+Tout d’abord, nous devons ajouter la librairie dans notre projet Symfony2 :
+
+composer require amazonwebservices/aws-sdk-for-php
+Le SDK d’Amazon est désormais présent dans votre projet.
+Nous allons déclarer un nouveau client :
+
+# app/config/parameters.yml.dist
+amazon_key:         YOUR_AWS_KEY
+amazon_secret_key:  YOUR_AWS_SECRET
+amazon_bucket_name: YOUR_BUCKET_NAME
+amazon_bucket_url:  YOUR_BUCKET_BASE_URL
+# src/AppBundle/Resources/config/services.yml
+  app.amazon_s3_client:
+    class: \AmazonS3
+    arguments:
+         - { key: %amazon_key%, secret: %amazon_secret_key% }
+Nous avons désormais un service app.amazon_s3_client qui nous permet d’intéragir avec Amazon S3.
+
+Passons désormais à la création d’un manager, nous permettant d’envoyer un fichier vers le Cloud :
+
+# src/AppBundle/Resources/config/services.yml
+  app.file_storage:
+    class: AppBundle\Manager\FileStorageManager
+    arguments:
+         - "@app.amazon_s3_client"
+         - %amazon_bucket_name%
+         - %amazon_bucket_url%
+# src/AppBundle/Manager/FileStorageManager.php
+<?php
+namespace AppBundle\Manager;
+
+use Aws\S3\MultipartUploader;
+use Aws\Exception\MultipartUploadException;
+
+class FileStorageManager
+{
+    /**
+* @var \AmazonS3
+*/
+    protected $client;
+
+    /**
+* @var string
+*/
+    protected $bucketName;
+
+    /**
+* @var string
+*/
+    protected $bucketUrl;
+
+    public function __construct(\AmazonS3 $client, $bucketName, $bucketUrl)
+{
+        $this->client = $client;
+        $this->bucketName = $bucketName;
+        $this->bucketUrl = $bucketUrl;
+    }
+
+    public function upload($filePath)
+{
+        $extension = pathinfo($url, PATHINFO_EXTENSION);
+        $fileName = sprintf('%d-%s.%s', time(), uniqid(), $extension);
+
+        $uploader = new MultipartUploader($s3Client, $filePath, [
+            'bucket' => $this->bucketName,
+            'key'    => $fileName,
+        ]);
+
+        $result = $uploader->upload();
+        return sprintf('%s%s', $this->bucketUrl, $result['ObjectURL']);
+    }
+}
+Il ne nous reste désormais plus qu’à appeler notre manager, dans un controller par exemple :
+
+# src/AppBundle/Controller/UploadController.php
+<?php
+
+namespace AppBundle\Controller;
+
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Bundle\FrameworkBundle\Controller\Controller;
+
+class UploadController extends Controller
+{
+    /**
+* @return Response
+*/
+    protected function uploadImage(Request $request)
+{
+        if ($request->files->has('picture)) {
+$storageManager = $this->get('app.file_storage');
+return new Response($storageManager->upload($request->files->get('picture)));
+        }
+
+        return new Response('Nothing to upload');
+    }
+}
+Pour plus de détail, regardez du côté de la doc du SDK PHP: http://docs.aws.amazon.com/aws-sdk-php/v3/guide/service/s3-multipart-upload.html
+
+Base de données
+
+La réplication d’une base de données permet de disposer de vos données à tout moment sur plusieurs serveurs.
+Il existe plusieurs types de réplications selon les SGBD, les deux principales sont :
+– maitre <-> maitre
+– maître <-> esclave
+
+La réplication maitre <-> maitre ne nécessite généralement aucune modification, tandis que la deuxième va vous obliger à adapter votre projet Symfony2.
+
+maître <-> esclave
+
+
+
+La configuration maître <-> esclave nécessite de séparer les requêtes READ et les requêtes WRITE.
+Les requêtes INSERT/UPDATE/DELETE devront être envoyées au serveur maître, tandis que les requêtes SELECT devront être envoyées aux serveurs esclaves.
+
+Doctrine permet de faire facilement cela, grâce à quelques paramètres de configurations.
+
+# app/config/config.yml
+doctrine:
+    dbal:
+        default_connection:   default
+        connections:
+            dev:
+                host:     localhost
+                port:     "%database_port%"
+dbname: "%database_name%"
+                user:     "%database_user%"
+password: "%database_password%"
+            default:
+                host:      master1.myhost.fr
+                port:     "%database_port%"
+dbname: "%database_name%"
+                user:     "%database_user%"
+password: "%database_password%"
+                slaves:
+                    slave1:
+                        host:     slave1.myhost.fr
+                        port:     "%database_port%"
+dbname: "%database_name%"
+                        user:     "%database_user%"
+password: "%database_password%"
+                    slave2:
+                        host:      slave2.myhost.fr
+                        port:     "%database_port%"
+dbname: "%database_name%"
+                        user:     "%database_user%"
+password: "%database_password%"
+Vous trouverez sur le site Symfony le détail de la configuration possible pour Doctrine: http://symfony.com/doc/current/reference/configuration/doctrine.html
+
+Les CRONs
+
+Si vous ne disposez pas d’un système de CRON distribué et que vous souhaitez les éxécuter sur vos serveurs webs, vous rencontrerez la problématique suivante dans une architecture distribuée: l’éxécution de vos crontasks se fera simultanéments autant de fois qu’il y a de serveurs webs. Cela peut vite devenir problématique, imaginez un email envoyé plusieurs fois…
+
+Une solution rapide à mettre en place grâce à Redis permet d’effectuer un lock qui préviendra toute éxécution simultanée de vos tâches.
+
+Voici un exemple d’implémentation. Pour utiliser le lock redis dans l’une de vos commandes, vous n’avez qu’à utiliser le Trait RedisLockCommand et appeler la méthode checkIfLocked() dans votre tâche.
+
+# src/AppBundle/Trait/RedisLockCommand.php
+<?php
+namespace AppBundle\Trait;
+/**
+* RedisLockCommand.
+*/
+trait RedisLockCommand
+{
+/**
+* Throw an \RuntimeException if the task was already executed by another server.
+*/
+protected function checkIfLocked()
+{
+$redis = $this->getContainer()->get('snc_redis.default');
+$time = new \DateTime();
+$lockKey = sprintf('lock:%s:%s', $this->getName(), $time->format('Ymd-Hi'));
+$lockData = json_encode(['ts' => $time->getTimestamp()]);
+$lock = $redis->setnx($lockKey, $lockData);
+if (!$lock) {
+throw new \RuntimeException(sprintf('Command "%s" already started.', $this->getName()));
+}
+$redis->expire($lock, 300);
+}
+}
+# src/AppBundle/Command/DemoCommand.php
+<?php
+
+namespace AppBundle\Command;
+
+use AppBundle\Trait\RedisLockCommand;
+use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+/**
+* DemoCommand.
+*/
+class DemoCommand extends ContainerAwareCommand
+{
+    use RedisLockCommand;
+
+    /**
+* {@inheritDoc}
+*/
+    protected function configure()
+    {
+        $this
+            ->setName('lock:demo')
+            ->setDescription('Redis lock demo')
+        ;
+    }
+
+    /**
+* {@inheritDoc}
+*/
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+        try {
+            $this->checkIfLocked();
+        } catch (\RuntimeException $e) {
+            $output->writeln(sprintf('<error>Task already executed. Execution cancelled..</error>'));
+            return;
+        }
+
+        // your own code
+        $output->writeln('<comment>Hello world</comment>');
+    }
+}
+Allez plus loin ..
+
+Docker
+RabbitMQ
+Logstash
+Capistrano
+Chronos
