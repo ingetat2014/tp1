@@ -1,7 +1,12 @@
 composer.phar
+/nbproject/
+/app/cache/
+/app/logs/
 /vendor/
 symfony
-
 # Commit your application's lock file http://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file
 # You may choose to ignore a library lock file http://getcomposer.org/doc/02-libraries.md#lock-file
 # composer.lock
+
+LisezMoi/~$ create a project sf 2.docx
+app/logs/dev.log
