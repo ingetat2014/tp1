@@ -1,0 +1,3 @@
+komay_prtg_homepage:
+    path:     /
+    defaults: { _controller: KomayPrtgBundle:Default:index }

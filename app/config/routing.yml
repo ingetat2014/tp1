@@ -1,3 +1,7 @@
+komay_prtg:
+    resource: "@KomayPrtgBundle/Resources/config/routing.yml"
+    prefix:   /
+
 app:
     resource: '@AppBundle/Controller/'
     type: annotation

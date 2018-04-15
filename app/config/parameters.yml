@@ -10,4 +10,3 @@ parameters:
     mailer_user: null
     mailer_password: null
     secret: af02ea2da1df0391d703383eec27a83ae87e9bc8
-    time_zone: "Africa/Casablanca"

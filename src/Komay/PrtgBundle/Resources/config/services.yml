@@ -1,0 +1,4 @@
+services:
+#    komay_prtg.example:
+#        class: Komay\PrtgBundle\Example
+#        arguments: ["@service_id", "plain_value", "%parameter%"]
