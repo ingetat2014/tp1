@@ -1,0 +1,2 @@
+Dans le FOSUserBundle :
+il ne faut pas oublier de marquer l’id protected pour pouvoir executer la requete doctrine:schema:update -f pour générer les tables sql
