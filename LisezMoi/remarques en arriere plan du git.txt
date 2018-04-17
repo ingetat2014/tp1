@@ -1,2 +1,7 @@
 Dans le FOSUserBundle :
 il ne faut pas oublier de marquer l’id protected pour pouvoir executer la requete doctrine:schema:update -f pour générer les tables sql
+puis apres le mapping et les relations il faut qu'on genere les getters les setters viala commande doctrine:generate:entities
+dèjà NB doctrine:generate:entity pour générer les entités
+NB :
+//soit l'objet ceci implicitement pointe sur l'id primary de l'objet personne (personne_id=2) : 
+$entities = $em->getRepository('KomayPrtgBundle:Message')->findBy(array('personne'=>2));
