@@ -69,6 +69,13 @@ class Personne
      */
     private $lastDisconnectDate;
 
+    /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        $this->messages = new \Doctrine\Common\Collections\ArrayCollection();
+    }
 
     /**
      * Get id
@@ -222,5 +229,39 @@ class Personne
     public function getLastDisconnectDate()
     {
         return $this->lastDisconnectDate;
+    }
+
+    /**
+     * Add message
+     *
+     * @param \Komay\PrtgBundle\Entity\Message $message
+     *
+     * @return Personne
+     */
+    public function addMessage(\Komay\PrtgBundle\Entity\Message $message)
+    {
+        $this->messages[] = $message;
+
+        return $this;
+    }
+
+    /**
+     * Remove message
+     *
+     * @param \Komay\PrtgBundle\Entity\Message $message
+     */
+    public function removeMessage(\Komay\PrtgBundle\Entity\Message $message)
+    {
+        $this->messages->removeElement($message);
+    }
+
+    /**
+     * Get messages
+     *
+     * @return \Doctrine\Common\Collections\Collection
+     */
+    public function getMessages()
+    {
+        return $this->messages;
     }
 }

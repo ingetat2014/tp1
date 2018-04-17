@@ -130,4 +130,28 @@ class Message
     {
         return $this->isArchived;
     }
+
+    /**
+     * Set personne
+     *
+     * @param \Komay\PrtgBundle\Entity\Personne $personne
+     *
+     * @return Message
+     */
+    public function setPersonne(\Komay\PrtgBundle\Entity\Personne $personne = null)
+    {
+        $this->personne = $personne;
+
+        return $this;
+    }
+
+    /**
+     * Get personne
+     *
+     * @return \Komay\PrtgBundle\Entity\Personne
+     */
+    public function getPersonne()
+    {
+        return $this->personne;
+    }
 }
