@@ -1,7 +1,37 @@
 Dans le FOSUserBundle :
-il ne faut pas oublier de marquer líid protected pour pouvoir executer la requete doctrine:schema:update -f pour gÈnÈrer les tables sql
+il ne faut pas oublier de marquer lÔøΩid protected pour pouvoir executer la requete doctrine:schema:update -f pour gÔøΩnÔøΩrer les tables sql
 puis apres le mapping et les relations il faut qu'on genere les getters les setters viala commande doctrine:generate:entities
-dËj‡ NB doctrine:generate:entity pour gÈnÈrer les entitÈs
+dÔøΩjÔøΩ NB doctrine:generate:entity pour gÔøΩnÔøΩrer les entitÔøΩs
 NB :
 //soit l'objet ceci implicitement pointe sur l'id primary de l'objet personne (personne_id=2) : 
 $entities = $em->getRepository('KomayPrtgBundle:Message')->findBy(array('personne'=>2));
+
+--configuration du VirtualHost
+/etc/hosts
+127.0.0.1	localhost	www.tp1.local
+et dans 
+ sudo gedit /etc/apache2/sites-available/tp1.conf
+
+-----------------------
+<VirtualHost *:80>
+
+  # Admin email, Server Name (domain name) and any aliases
+  ServerAdmin ismailkomay@gmail.com
+  ServerName  tp1.local
+  ServerAlias www.tp1.local
+
+
+  # Index file and Document Root (where the public files are located)
+  DirectoryIndex app_dev.php
+  DocumentRoot /var/www/git/tp1/web/
+
+
+  # Custom log file locations
+  LogLevel warn
+  ErrorLog /var/www/ErrorLog/ErrorLog.log
+  CustomLog /var/www/CustomLog/CustomLog.log combined
+
+</VirtualHost>
+---------------------------
+don't forget php app/console -s
+et apr√®s list
